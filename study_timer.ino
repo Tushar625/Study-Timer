@@ -1,3 +1,5 @@
+#include"state_machine.h"
+
 #define R_PIN 3
 #define G_PIN 5
 #define B_PIN 6
@@ -10,22 +12,23 @@
 #define REST_COLOR {0, 255, 0} /*green*/
 #define EXTRA_REST_COLOR {255, 0, 0} /*red*/
 
+// durations in milli seconds
+
 #define WORK_DURATION /*10*1000*/ 20*60*1000lu
 #define REST_DURATION /*10*1000*/ 5*60*1000lu
 #define BLINK_DURATION 500lu
 
-enum STATES{WORK, REST, EXTRA_REST, STATE_COUNT};
 
 struct rgb
 {
     uint8_t r, g, b;
 };
 
-STATES current_state;
 
-unsigned long t0;
+STATE_MACHINE sm;
 
-bool blink;
+unsigned long time_point;
+
 
 // setting the colour of rgb led
 
@@ -49,15 +52,123 @@ void ping()
     digitalWrite(BUZZ_PIN, LOW);
 }
 
+
+extern class REST_STATE rest_state;
+
+// define work state
+
+class WORK_STATE : public BASE_STATE
+{
+    void Enter()	// initialze this state
+		{
+        ping();
+
+        time_point = millis();
+    }
+
+		void Loop()
+		{
+        set_color(WORK_COLOR);
+
+        // state change
+
+        if(millis() - time_point > WORK_DURATION)
+        {
+            sm.change_to(rest_state);
+        }
+    }
+} work_state;
+
+
+extern class EXTRA_REST_STATE extra_rest_state;
+
+// define rest state
+
+class REST_STATE : public BASE_STATE
+{
+    void Enter()	// initialze this state
+		{
+        ping();
+
+        time_point = millis();
+    }
+
+		void Loop()
+		{
+        set_color(REST_COLOR);
+
+        // state change
+
+        if(millis() - time_point > REST_DURATION)
+        {
+            // resting time is over
+
+            sm.change_to(extra_rest_state);
+        }
+        else if(digitalRead(IN_PIN) == LOW)
+        {
+            // our push button is pressed
+            // skip rest go to work
+
+            sm.change_to(work_state);
+        }
+    }
+} rest_state;
+
+
+// define extra_rest state
+
+class EXTRA_REST_STATE : public BASE_STATE
+{
+    bool blink;
+
+    void Enter()	// initialze this state
+		{
+        ping();
+
+        time_point = millis();
+
+        blink = true;
+    }
+
+		void Loop()
+		{
+        // we want our light to blink to warn user
+
+        if(millis() - time_point > BLINK_DURATION)
+        {
+            blink = !blink;
+
+            time_point = millis();
+        }
+
+        // turn the light on or off depending on blink_state
+
+        if(blink)
+        {
+            set_color(EXTRA_REST_COLOR);
+        }
+        else
+        {
+            set_color({0, 0, 0});
+        }
+
+        // state change
+
+        if(digitalRead(IN_PIN) == LOW)
+        {
+            // our push button is pressed
+            // user wants to start working
+
+            sm.change_to(work_state);
+        }
+    }
+} extra_rest_state;
+
+
 void setup()
 {
     // put your setup code here, to run once:
-
-    current_state = EXTRA_REST;
-
-    t0 = millis();
-
-    blink = true;
 
     pinMode(R_PIN, OUTPUT);
 
@@ -69,104 +180,10 @@ void setup()
 
     pinMode(IN_PIN, INPUT_PULLUP);
 
-    ping();
+    sm.change_to(extra_rest_state);
 }
 
 void loop()
 {
-    // put your main code here, to run repeatedly:
-  
-    switch(current_state)
-    {
-        case WORK:
-
-          // working state
-
-          set_color(WORK_COLOR);
-
-          if(millis() - t0 > WORK_DURATION)
-          {
-              // time for rest
-
-              ping();
-              
-              current_state = REST;
-
-              t0 = millis();  // initialize t0 for next state
-          }
-
-          break;
-        
-        case REST:
-
-          // resting state
-
-          set_color(REST_COLOR);
-
-          if(millis() - t0 > REST_DURATION)
-          {
-              // resting time is over
-
-              ping();
-
-              current_state = EXTRA_REST;
-
-              t0 = millis();  // initialize t0 for next state
-          }
-          else if(digitalRead(IN_PIN) == LOW)
-          {
-              // our push button is pressed
-              // skip rest go to work
-
-              ping();
-
-              current_state = WORK;
-
-              t0 = millis();  // initialize t0 for next state
-          }
-
-          break;
-        
-        case EXTRA_REST:
-
-          // extra resting state
-
-          // we want our light to blink to warn user
-
-          if(millis() - t0 > BLINK_DURATION)
-          {
-              blink = !blink;
-
-              t0 = millis();
-          }
-
-          // turn the light on or off depending on blink_state
-
-          if(blink)
-          {
-              set_color(EXTRA_REST_COLOR);
-
-              //digitalWrite(BUZZ_PIN, HIGH);
-          }
-          else
-          {
-              set_color({0, 0, 0});
-
-              //digitalWrite(BUZZ_PIN, LOW);
-          }
-
-          if(digitalRead(IN_PIN) == LOW)
-          {
-              // our push button is pressed
-              // user wants to start working
-
-              ping();
-
-              current_state = WORK;
-
-              t0 = millis();
-          }
-
-          break;
-    }
+    sm.Loop();
 }
