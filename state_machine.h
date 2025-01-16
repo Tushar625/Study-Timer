@@ -11,8 +11,8 @@
 	Example: STATE_MACHINE sm;
 
 	now create the states, each state is a class inherited from BASE_STATE class ("public inheritance")
-	with proper definition of Enter(), Update(), Render(), Exit() functions, and create objects of those
-	'state classes'. These objects will serve as the states.
+	with proper definition of Enter(), Loop(), Exit() functions, and create objects of those 'state classes'.
+  These objects will serve as the states.
 
 	Example:
 
@@ -21,26 +21,24 @@
 		void Enter()	// initialze this state
 		{...}
 
-		int Update(double dt)	// update this state
-		{...}
-
-		void Render()	// render this state
+		void Loop()	// working of this state
 		{...}
 
 		void Exit()		// destroy this state
 		{...}
 	} initial;
 
-	inside the Update() you call "sm.change_to()" to change the current state of the state machine
+	inside the Loop() you call "sm.change_to()" to change the current state of the state machine
 	this function takes a reference to a state object and makes it the current state. this function
 	is also used to set the initial state of the state machine.
 
-	note: a call to "sm.change_to()" from Update() of a state must be last action of this function,
+	note: a call to "sm.change_to()" from Loop() of a state must be last action of this function,
 	as sm.change_to() calls the Exit() of current state i.e., destroys the current state
 
 	Example:
 
-	extern class play_state play;	// declaring the state object which is defined later
+	
+  extern class play_state play;	// declaring the state object which is defined later
 
 	//==========================
 	// ~~~~~ initial state ~~~~~
@@ -50,7 +48,7 @@
 	{
 		...
 
-		int Update(double dt)
+		void Loop()
 		{
 			...
 			sm.change_to(play);	// change state: 'initial' -> 'play' 
@@ -60,9 +58,10 @@
 		...
 	};
 	
-	initial_state initial;	// creating the state object
+  initial_state initial;	// creating the state object
 
-	//=======================
+	
+  //=======================
 	// ~~~~~ play state ~~~~~
 	//=======================
 	
@@ -73,23 +72,23 @@
 	
 	play_state play;	// creating the state object
 	
-	// the function that initializes the game
 
-	Game::Create()
+	void setup()
 	{
 		...
 		sm.change_to(initial);	// setting 'intial' as initial state
 		...
 	}
 
-	call the update and render methods of STATE_MACHINE from update and render
-	functions of the game loop, they inturn call the update and render methods
-	of current state, respectively.
+	call sm.Loop() from loop(), this inturn calls the Loop() method
+	of current state.
 
-	Update() of the states can also return 'int' data, which is again returned
-	by the Update() of state machine so, you can use this to signal the Update()
-	of the game loop to stop the game; if no current state is set, Update() of
-	state machine returns the minimum int value, a garbage value.
+	By default this state machine stays at "NULL_STATE", an object of BASE_STATE
+	class. STATE_MACHINE class has a method called "null_state()", that returns
+	true when the state machine is at "NULL_STATE".
+
+	To stop the state machine, just change the state to "NULL_STATE" and use
+	"null_state()" method from the loop().
 
 	Example:
 
@@ -97,15 +96,16 @@
 	{
 		...
 
-		int Update(double dt)
+		void Loop()
 		{
 			...
+
 			if(...)
 			{
-				return 0;	// using '0' to signal exit
+				sm.change_to(NULL_STATE);	// change the state to "NULL_STATE"
 			}
+			
 			...
-			return -1;
 		}
 
 		...
@@ -113,20 +113,22 @@
 
 	...
 
-	bool Game::Update(double dt)
+	void loop()
 	{
 		...
-		if(sm.Update(dt) == 0)
+
+		if(sm.end_state() == true)
 		{
-			// code to stop the game loop
+			// code to stop the system
 			...
 		}
+		
 		...
 	}
 
 	==================================================================================
 
-	Data of game states:
+	Local Data of states:
 
 	You can simply have data members in state class, but if you want to have some data
 	that will only exist while the state is in use, you should do it the following way,
@@ -153,15 +155,19 @@
 
 			...
 
-			// initialize the variables
+			// initialize the variables with a constructor
 
 			data(...)
 			{...}
 
-		} *p_data;
+		};
+		
+		std::unique_ptr<data> p_data;
 
 
-		yoo_state() : p_data(NULL)
+		// constructor of the state class
+		
+		yoo_state()
 		{...}
 
 
@@ -170,7 +176,7 @@
 			...
 			// creating the local state data
 
-			p_data = new data(...);
+			p_data = std::make_unique<data>(...);
 			...
 		}
 
@@ -180,37 +186,24 @@
 			...
 			// destroying the local state data
 
-			delete b_data;
+			b_data.reset();
 			...
 		}
 
 	};
 
-	****** Note:
-
-	There is a little problem, currently I suggest to use change_to() function to change
-	states, and if any state want to stop the game loop it returns a value through Update()
-	which is read by Update of game loop and the game loop stops. If you stop the game loop
-	this way, the Exit() function of the last state is not called. This can become a significant
-	issue if we use this system to implement a state machine that is local to another state.
-	Then the Exit() of that inner state machine will never be executed unless we manually
-	execute it, which is not very programmer friendly.
-
 	==================================================================================
 
 	Transferring data between states:
 
-	This state machine does not provide any facility to send data while changing state
-	but there's a way to do so. Simply keep some public data members and use then to
-	transfer data while changing states, see the example below. Notice that, to send
-	data to an state object declated later in the code we utilise a function, this
-	processe is described nicely in the example below.
+	An overloaded version of change_to() function can be used to send data while changing
+	state, though the receiving state must have a function called "init()". see the example
+	below,
 
 	Example:
 
-	extern class play_state play;	// declaring the state object which is defined later
 
-	void set_play_state(int play_data);	// declaring the function used to send data to play state object
+	extern class play_state play;	// declaring the state object which is defined later
 
 	//==========================
 	// ~~~~~ initial state ~~~~~
@@ -222,18 +215,27 @@
 
 		public:
 
-		int initial_data;
+		// function to receive data
+
+		void init(int _initial_data1, int _initial_data2)
+		{
+			initial_data1 = _initial_data1;
+
+			initial_data2 = _initial_data2;
+		}
 
 		private:
 
+		int initial_data1, initial_data2;
+
 		...
 
-		int Update(double dt)
+		void Loop()
 		{
 			...
-			set_play_state(some_data);	// sending data to play state
+			// change state: 'initial' -> 'play' and sending data to play state
 
-			sm.change_to(play);	// change state: 'initial' -> 'play' 
+			sm.change_to(play, some_data);
 			...
 		}
 
@@ -241,6 +243,7 @@
 	};
 	
 	initial_state initial;	// creating the state object
+
 
 	//=======================
 	// ~~~~~ play state ~~~~~
@@ -252,32 +255,29 @@
 		
 		public:
 
-		int play_data;
+		// function to receive data
+
+		void init(int _play_data)
+		{
+			play_data = _play_data;
+		}
 
 		private:
+
+		int play_data;
 
 		...
 	};
 	
 	play_state play;	// creating the state object
 
-	// since we can't access members of 'play' before declaring it
-	// we define this function here, which is again declared before
-	// initial_state definition and call it to send data to play state
 
-	void set_play_state(int play_data)
-	{
-		play.play_data = play_data;
-	}
-	
-	// the function that initializes the game
-
-	Game::Create()
+	void setup()
 	{
 		...
-		initial.initial_data = some_data;	// sending data to play state
+		// setting 'intial' as initial state and sending data to it
 		
-		sm.change_to(initial);	// setting 'intial' as initial state
+		sm.change_to(initial, some_data1, some_data2);
 		...
 	}
 
@@ -285,9 +285,9 @@
 
 
 /*
-	this is a template for game states,
+	this is a template for states,
 
-	game states are actually classes that inherite this class and redefine the
+	states are actually classes that inherite this class and redefine the
 	virtual methods as per their requirements
 */
 
@@ -314,7 +314,7 @@ class BASE_STATE
 class STATE_MACHINE
 {
 	/*
-		points to the current states or points to NULL if no current state given
+		points to the current states or points to NULL_STATE if no current state given
 	*/
 	
 	BASE_STATE *current_state;
@@ -322,7 +322,7 @@ class STATE_MACHINE
 
 	public:
 
-	STATE_MACHINE() : current_state(&NULL_STATE) // default state is set initially
+	STATE_MACHINE() : current_state(&NULL_STATE) // null state is set initially
 	{}
 
 
@@ -342,6 +342,12 @@ class STATE_MACHINE
 		current_state->Enter(); // enter new state
 	}
 
+
+  /*
+    same as previous method but has ability to send some data to the new state
+		by calling the init() of the new state
+  */
+
 	template<typename STATE_TYPE, typename ...type>
 	
 	void change_to(STATE_TYPE& next_state, type ...args)
@@ -356,7 +362,12 @@ class STATE_MACHINE
 	}
 
 
-	bool null_state() const noexcept
+	/*
+		indicate when current_state points to NULL_STATE, i.e., this state
+		machine has no active state
+	*/
+
+  bool null_state() const noexcept
 	{
 		return current_state == &NULL_STATE;
 	}

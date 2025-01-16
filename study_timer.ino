@@ -55,7 +55,9 @@ void ping()
 
 extern class REST_STATE rest_state;
 
+//==================
 // define work state
+//==================
 
 class WORK_STATE : public BASE_STATE
 {
@@ -82,7 +84,9 @@ class WORK_STATE : public BASE_STATE
 
 extern class EXTRA_REST_STATE extra_rest_state;
 
+//==================
 // define rest state
+//==================
 
 class REST_STATE : public BASE_STATE
 {
@@ -116,7 +120,9 @@ class REST_STATE : public BASE_STATE
 } rest_state;
 
 
+//========================
 // define extra_rest state
+//========================
 
 class EXTRA_REST_STATE : public BASE_STATE
 {
