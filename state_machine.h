@@ -197,8 +197,8 @@
 	Transferring data between states:
 
 	An overloaded version of change_to() function can be used to send data while changing
-	state, though the receiving state must have a function called "init()". see the example
-	below,
+	state, though the receiving state must have a function called "init()". Try to make
+	"init()" noexcept for better performance. See the example below,
 
 	Example:
 
@@ -217,7 +217,7 @@
 
 		// function to receive data
 
-		void init(int _initial_data1, int _initial_data2)
+		void init(int _initial_data1, int _initial_data2) noexcept
 		{
 			initial_data1 = _initial_data1;
 
@@ -257,7 +257,7 @@
 
 		// function to receive data
 
-		void init(int _play_data)
+		void init(int _play_data) noexcept
 		{
 			play_data = _play_data;
 		}
