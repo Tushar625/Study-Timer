@@ -171,6 +171,8 @@ class EXTRA_REST_STATE : public BASE_STATE
 
     EXTRA_REST_STATE()
     {
+        // !!!! when I call it from Enter() the work mode light turned green for no reason
+        
         MsTimer2::set(BLINK_DURATION, blink_led); // setup the independent software interrupt system
     }
 } extra_rest_state;
