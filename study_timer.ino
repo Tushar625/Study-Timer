@@ -66,12 +66,12 @@ class WORK_STATE : public BASE_STATE
         ping();
 
         time_point = millis();
+
+        set_color(WORK_COLOR);
     }
 
 		void Loop()
 		{
-        set_color(WORK_COLOR);
-
         // state change
 
         if(millis() - time_point > WORK_DURATION)
@@ -95,12 +95,12 @@ class REST_STATE : public BASE_STATE
         ping();
 
         time_point = millis();
+
+        set_color(REST_COLOR);
     }
 
 		void Loop()
 		{
-        set_color(REST_COLOR);
-
         // state change
 
         if(millis() - time_point > REST_DURATION)
@@ -145,18 +145,11 @@ class EXTRA_REST_STATE : public BASE_STATE
         {
             blink = !blink;
 
+            // turn the light on or off depending on blink_state
+
+            (blink) ? set_color(EXTRA_REST_COLOR) : set_color({0, 0, 0});
+
             time_point = millis();
-        }
-
-        // turn the light on or off depending on blink_state
-
-        if(blink)
-        {
-            set_color(EXTRA_REST_COLOR);
-        }
-        else
-        {
-            set_color({0, 0, 0});
         }
 
         // state change
