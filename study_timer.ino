@@ -1,3 +1,6 @@
+// https://github.com/PaulStoffregen/MsTimer2/blob/f90127ce8289b73c2e74b8be222ab7c755621717/MsTimer2.h
+
+#include<MsTimer2.h>  // implements a software interrupt that runs a function at specific interval of time
 #include"state_machine.h"
 
 #define R_PIN 3
@@ -126,32 +129,15 @@ class REST_STATE : public BASE_STATE
 
 class EXTRA_REST_STATE : public BASE_STATE
 {
-    bool blink;
-
     void Enter()	// initialze this state
 		{
         ping();
 
-        time_point = millis();
-
-        blink = true;
+        MsTimer2::start();  // start the independent software interrupt system
     }
 
 		void Loop()
 		{
-        // we want our light to blink to warn user
-
-        if(millis() - time_point > BLINK_DURATION)
-        {
-            blink = !blink;
-
-            // turn the light on or off depending on blink_state
-
-            (blink) ? set_color(EXTRA_REST_COLOR) : set_color({0, 0, 0});
-
-            time_point = millis();
-        }
-
         // state change
 
         if(digitalRead(IN_PIN) == LOW)
@@ -161,6 +147,31 @@ class EXTRA_REST_STATE : public BASE_STATE
 
             sm.change_to(work_state);
         }
+    }
+
+    void Exit()
+    {
+        MsTimer2::stop(); // stop the independent software interrupt system
+    }
+
+    // the function used to blink the led using software interrupt
+
+    static void blink_led()
+    {
+        static volatile bool blink = true;
+
+        blink = !blink;
+
+        // turn the light on or off depending on blink_state
+
+        (blink) ? set_color(EXTRA_REST_COLOR) : set_color({0, 0, 0});
+    }
+
+    public:
+
+    EXTRA_REST_STATE()
+    {
+        MsTimer2::set(BLINK_DURATION, blink_led); // setup the independent software interrupt system
     }
 } extra_rest_state;
 
