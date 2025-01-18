@@ -127,6 +127,8 @@ class REST_STATE : public BASE_STATE
 // define extra_rest state
 //========================
 
+// for now this state uses interrupts for blinking light, revert back to time point method if needed in future
+
 class EXTRA_REST_STATE : public BASE_STATE
 {
     void Enter()	// initialze this state
