@@ -1,25 +1,31 @@
 // https://github.com/PaulStoffregen/MsTimer2/blob/f90127ce8289b73c2e74b8be222ab7c755621717/MsTimer2.h
 
 #include<MsTimer2.h>  // implements a software interrupt that runs a function at specific interval of time
+#include"timer.h"
+#include"push_button.h"
+#include"rotary_encoder.h"
+#include"oled_display.h"
+#include"buzzer.h"
 #include"state_machine.h"
+
 
 #define R_PIN 3
 #define G_PIN 5
 #define B_PIN 6
 
-#define BUZZ_PIN 19 // buzzer output
-
-#define IN_PIN 18 // digital input
 
 #define WORK_COLOR {255 / 5, 100 / 5, 0} /*dim orange*/
 #define REST_COLOR {0, 255, 0} /*green*/
 #define EXTRA_REST_COLOR {255, 0, 0} /*red*/
 
-// durations in milli seconds
+// durations
 
-#define WORK_DURATION /*10*1000*/ 20*60*1000lu
-#define REST_DURATION /*10*1000*/ 5*60*1000lu
-#define BLINK_DURATION 500lu
+#define WORK_MINS /*0*/ 20
+#define WORK_SECS /*10*/ 0
+#define REST_MINS /*0*/ 5
+#define REST_SECS /*10*/ 0
+#define MAX_REST_MINS 20
+#define BLINK_DURATION 500lu  // in milli seconds
 
 
 struct rgb
@@ -44,17 +50,6 @@ void set_color(rgb color)
     analogWrite(B_PIN, color.b);
 }
 
-// just generate a little sound with buzzer
-
-void ping()
-{
-    digitalWrite(BUZZ_PIN, HIGH);
-
-    delay(100);
-
-    digitalWrite(BUZZ_PIN, LOW);
-}
-
 
 extern class REST_STATE rest_state;
 
@@ -63,12 +58,16 @@ extern class REST_STATE rest_state;
 //==================
 
 class WORK_STATE : public BASE_STATE
-{
+{   
+    unsigned long work_duration;
+
     void Enter()	// initialze this state
 		{
         ping();
 
         time_point = millis();
+
+        OLED.clear();
 
         set_color(WORK_COLOR);
     }
@@ -77,10 +76,17 @@ class WORK_STATE : public BASE_STATE
 		{
         // state change
 
-        if(millis() - time_point > WORK_DURATION)
+        if(millis() - time_point > work_duration)
         {
             sm.change_to(rest_state);
         }
+    }
+
+    public:
+
+    void init(unsigned long _work_duration)
+    {
+        work_duration = _work_duration;
     }
 } work_state;
 
@@ -93,35 +99,79 @@ extern class EXTRA_REST_STATE extra_rest_state;
 
 class REST_STATE : public BASE_STATE
 {
+    TIMER timer;
+
     void Enter()	// initialze this state
 		{
         ping();
 
         time_point = millis();
 
+        // adding up resting time with unused resting time
+
+        timer.second += REST_SECS;
+
+        if(timer.second >= 60)
+        {
+            timer.second -= 60;
+
+            ++timer.minute;    
+        }
+
+        timer.minute += REST_MINS;
+
+        if(timer.minute > MAX_REST_MINS)
+        {
+            timer.minute = MAX_REST_MINS;
+        }
+
+        timer.no_point();
+
+        OLED.print_num(timer);
+
         set_color(REST_COLOR);
     }
 
 		void Loop()
 		{
+        // display remaining time
+
+        if(millis() - time_point > 999)
+        {
+            time_point = millis();
+            
+            timer.decrement();
+
+            OLED.print_num(timer);
+        }
+
         // state change
 
-        if(millis() - time_point > REST_DURATION)
+        if(timer.minute == 0 && timer.second == 0)
         {
             // resting time is over
 
             sm.change_to(extra_rest_state);
         }
-        else if(digitalRead(IN_PIN) == LOW)
+        else if(button.pressed())
         {
             // our push button is pressed
             // skip rest go to work
 
             sm.change_to(work_state);
         }
+        else if(encoder_button.pressed())
+        {
+            // our push button is pressed
+            // skip rest go to work
+
+            sm.change_to(extra_rest_state);
+        }
     }
 } rest_state;
 
+
+extern class setting_state setting;
 
 //========================
 // define extra_rest state
@@ -131,29 +181,86 @@ class REST_STATE : public BASE_STATE
 
 class EXTRA_REST_STATE : public BASE_STATE
 {
+    TIMER work_timer;
+
     void Enter()	// initialze this state
 		{
         ping();
+
+        encoder.setPosition(0);
+
+        work_timer.no_point();
+
+        OLED.print_num(work_timer);
 
         MsTimer2::start();  // start the independent software interrupt system
     }
 
 		void Loop()
 		{
-        // state change
+        // indication direction
 
-        if(digitalRead(IN_PIN) == LOW)
+        if((int)encoder.getDirection())
+        {
+            // limit the position between MAX and MIN
+            
+            if(encoder.getPosition() >= 1)
+            {
+                work_timer.point_second();
+
+                encoder.setPosition(1);
+            }
+            else if(encoder.getPosition() <= -1)
+            {
+                work_timer.point_minute();
+
+                encoder.setPosition(-1);
+            }
+            else
+            {
+                work_timer.no_point();
+            }
+
+            OLED.print_num(work_timer);
+        }
+
+        // selection
+
+        if(encoder_button.pressed())
+        {
+            switch((int)encoder.getPosition())
+            {
+                case -1: work_timer.select_minute(); sm.change_to(setting, &work_timer, &(work_timer.minute), 60, 0); break;
+
+                case 1: work_timer.select_second(); sm.change_to(setting, &work_timer, &(work_timer.second), 59, 0); break;
+
+                case 0: 
+                        MsTimer2::stop(); // stop the independent software interrupt system
+
+                        sm.change_to(work_state, (work_timer.minute * 60 + work_timer.second) * 1000lu/*in milliseconds*/);
+                        
+                        break;
+            }
+
+            return;
+        }
+
+        // change TO WORK state
+
+        if(button.pressed())
         {
             // our push button is pressed
             // user wants to start working
 
-            sm.change_to(work_state);
+            MsTimer2::stop(); // stop the independent software interrupt system
+
+            sm.change_to(work_state, (work_timer.minute * 60 + work_timer.second) * 1000lu/*in milliseconds*/);
         }
     }
 
     void Exit()
     {
-        MsTimer2::stop(); // stop the independent software interrupt system
+        // MsTimer2::stop(); // stop the independent software interrupt system
     }
 
     // the function used to blink the led using software interrupt
@@ -176,9 +283,75 @@ class EXTRA_REST_STATE : public BASE_STATE
         // !!!! when I call it from Enter() the work mode light turned green for no reason
         
         MsTimer2::set(BLINK_DURATION, blink_led); // setup the independent software interrupt system
+
+        work_timer.minute = WORK_MINS;
+
+        work_timer.second = WORK_SECS;
     }
 } extra_rest_state;
 
+
+
+class setting_state : public BASE_STATE
+{
+		void Enter()	// initialze this state
+		{
+        ping();
+
+        OLED.print_num(*timer);
+
+        encoder.setPosition(*data);
+    }
+
+		void Loop()	// working of this state
+		{
+        // update minute or second
+
+        if((int)encoder.getDirection())
+        {
+            // limit the position between MAX and MIN
+            
+            if(encoder.getPosition() > max_rotation)
+            {
+                encoder.setPosition(min_rotation);
+            }
+            else if(encoder.getPosition() < min_rotation)
+            {
+                encoder.setPosition(max_rotation);
+            }
+
+            *data = encoder.getPosition();
+
+            OLED.print_num(*timer);
+        }
+
+        // selection
+
+        if(encoder_button.pressed())
+        {
+            sm.change_to(extra_rest_state);
+        }
+    }
+
+    TIMER *timer;
+
+    uint8_t *data;  // points to a member data of timer (minute or second)
+
+    uint8_t max_rotation, min_rotation;
+
+    public:
+
+		void init(TIMER *_timer, uint8_t *_data, uint8_t _max_rotation, uint8_t _min_rotation)
+		{
+        timer = _timer;
+
+        data = _data;
+
+        max_rotation = _max_rotation;
+        
+        min_rotation = _min_rotation;
+    }
+} setting;
 
 void setup()
 {
@@ -190,14 +363,22 @@ void setup()
 
     pinMode(B_PIN, OUTPUT);
 
-    pinMode(BUZZ_PIN, OUTPUT);
+    OLED.setup();
 
-    pinMode(IN_PIN, INPUT_PULLUP);
+    buzzer_setup();
+
+    button_setup();
 
     sm.change_to(extra_rest_state);
 }
 
 void loop()
 {
+    button.update();
+
+    encoder_button.update();
+
+    encoder.tick();
+
     sm.Loop();
 }
