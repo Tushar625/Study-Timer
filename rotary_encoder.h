@@ -8,6 +8,6 @@
 #define DT 7
 #define CLK 8
 
-RotaryEncoder encoder(DT, CLK, RotaryEncoder::LatchMode::TWO03);
+RotaryEncoder encoder(CLK, DT, RotaryEncoder::LatchMode::TWO03);
 
 #endif

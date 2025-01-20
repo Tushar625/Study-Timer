@@ -22,8 +22,6 @@
 
 #define WORK_MINS /*0*/ 20
 #define WORK_SECS /*10*/ 0
-#define REST_MINS /*0*/ 5
-#define REST_SECS /*10*/ 0
 #define MAX_REST_MINS 20
 #define BLINK_DURATION 500lu  // in milli seconds
 
@@ -37,6 +35,8 @@ struct rgb
 STATE_MACHINE sm;
 
 unsigned long time_point;
+
+TIMER work_timer;
 
 
 // setting the colour of rgb led
@@ -65,6 +65,8 @@ class WORK_STATE : public BASE_STATE
 		{
         ping();
 
+        work_duration = (work_timer.minute * 60 + work_timer.second) * 1000lu/*in milliseconds*/;
+
         time_point = millis();
 
         OLED.clear();
@@ -80,13 +82,6 @@ class WORK_STATE : public BASE_STATE
         {
             sm.change_to(rest_state);
         }
-    }
-
-    public:
-
-    void init(unsigned long _work_duration)
-    {
-        work_duration = _work_duration;
     }
 } work_state;
 
@@ -109,7 +104,7 @@ class REST_STATE : public BASE_STATE
 
         // adding up resting time with unused resting time
 
-        timer.second += REST_SECS;
+        timer.second += work_timer.second / 4;
 
         if(timer.second >= 60)
         {
@@ -118,7 +113,7 @@ class REST_STATE : public BASE_STATE
             ++timer.minute;    
         }
 
-        timer.minute += REST_MINS;
+        timer.minute += work_timer.minute / 4;
 
         if(timer.minute > MAX_REST_MINS)
         {
@@ -181,8 +176,6 @@ extern class setting_state setting;
 
 class EXTRA_REST_STATE : public BASE_STATE
 {
-    TIMER work_timer;
-
     void Enter()	// initialze this state
 		{
         ping();
@@ -237,7 +230,7 @@ class EXTRA_REST_STATE : public BASE_STATE
                 case 0: 
                         MsTimer2::stop(); // stop the independent software interrupt system
 
-                        sm.change_to(work_state, (work_timer.minute * 60 + work_timer.second) * 1000lu/*in milliseconds*/);
+                        sm.change_to(work_state);
                         
                         break;
             }
@@ -254,7 +247,7 @@ class EXTRA_REST_STATE : public BASE_STATE
 
             MsTimer2::stop(); // stop the independent software interrupt system
 
-            sm.change_to(work_state, (work_timer.minute * 60 + work_timer.second) * 1000lu/*in milliseconds*/);
+            sm.change_to(work_state);
         }
     }
 
