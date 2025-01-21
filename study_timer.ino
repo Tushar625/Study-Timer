@@ -148,17 +148,9 @@ class REST_STATE : public BASE_STATE
 
             sm.change_to(extra_rest_state);
         }
-        else if(button.pressed())
-        {
-            // our push button is pressed
-            // skip rest go to work
-
-            sm.change_to(work_state);
-        }
         else if(encoder_button.pressed())
         {
-            // our push button is pressed
-            // skip rest go to work
+            // skip rest
 
             sm.change_to(extra_rest_state);
         }
@@ -186,7 +178,7 @@ class EXTRA_REST_STATE : public BASE_STATE
 
         OLED.print_num(work_timer);
 
-        MsTimer2::start();  // start the independent software interrupt system
+        MsTimer2::start();  // start the blinking LED
     }
 
 		void Loop()
@@ -195,7 +187,7 @@ class EXTRA_REST_STATE : public BASE_STATE
 
         if((int)encoder.getDirection())
         {
-            // limit the position between MAX and MIN
+            // limit the position between -1 and 1
             
             if(encoder.getPosition() >= 1)
             {
@@ -217,43 +209,37 @@ class EXTRA_REST_STATE : public BASE_STATE
             OLED.print_num(work_timer);
         }
 
-        // selection
+        // selection and change state
 
         if(encoder_button.pressed())
         {
             switch((int)encoder.getPosition())
             {
-                case -1: work_timer.select_minute(); sm.change_to(setting, &work_timer, &(work_timer.minute), 60, 0); break;
+                case -1: // change TO SETTING state
+                
+                        work_timer.select_minute();
+                        
+                        sm.change_to(setting, &work_timer, &(work_timer.minute), 60, 0);
+                        
+                        break;
 
-                case 1: work_timer.select_second(); sm.change_to(setting, &work_timer, &(work_timer.second), 59, 0); break;
+                case 1: // change TO SETTING state
 
-                case 0: 
-                        MsTimer2::stop(); // stop the independent software interrupt system
+                        work_timer.select_second();
+                        
+                        sm.change_to(setting, &work_timer, &(work_timer.second), 59, 0);
+                        
+                        break;
+
+                case 0: // change TO WORK state
+
+                        MsTimer2::stop(); // stop the blinking LED
 
                         sm.change_to(work_state);
                         
                         break;
             }
-
-            return;
         }
-
-        // change TO WORK state
-
-        if(button.pressed())
-        {
-            // our push button is pressed
-            // user wants to start working
-
-            MsTimer2::stop(); // stop the independent software interrupt system
-
-            sm.change_to(work_state);
-        }
-    }
-
-    void Exit()
-    {
-        // MsTimer2::stop(); // stop the independent software interrupt system
     }
 
     // the function used to blink the led using software interrupt
@@ -358,6 +344,8 @@ void setup()
 
     OLED.setup();
 
+    OLED.clear();
+
     buzzer_setup();
 
     button_setup();
@@ -367,8 +355,6 @@ void setup()
 
 void loop()
 {
-    button.update();
-
     encoder_button.update();
 
     encoder.tick();

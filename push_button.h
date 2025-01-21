@@ -5,12 +5,12 @@
 
 #include<Bounce2.h>
 
-#define BUTTON_PIN 4
+// #define BUTTON_PIN 4
 #define ENCODER_BUTTON_PIN 2
 
 // object for our push button
 
-Bounce2::Button button;
+// Bounce2::Button button;
 
 Bounce2::Button encoder_button;
 
@@ -18,11 +18,11 @@ Bounce2::Button encoder_button;
 
 void button_setup()
 {
-    button.attach(BUTTON_PIN, INPUT_PULLUP);
+    /*button.attach(BUTTON_PIN, INPUT_PULLUP);
 
     button.interval(5);
 
-    button.setPressedState(LOW);
+    button.setPressedState(LOW);*/
 
     encoder_button.attach(ENCODER_BUTTON_PIN, INPUT_PULLUP);
 

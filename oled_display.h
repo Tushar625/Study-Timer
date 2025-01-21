@@ -40,8 +40,6 @@ class OLED_DISPLAY
 
         display.setContrast(10);  // dim the display
 
-        display.clearDisplay();
-
         // calculating display position
 
         display.setTextSize(3);
