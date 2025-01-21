@@ -6,17 +6,18 @@
 #include"rotary_encoder.h"
 #include"oled_display.h"
 #include"buzzer.h"
+#include"rgb_led.h"
 #include"state_machine.h"
 
 
-#define R_PIN 3
-#define G_PIN 5
-#define B_PIN 6
 
+// colors
 
 #define WORK_COLOR {255 / 5, 100 / 5, 0} /*dim orange*/
 #define REST_COLOR {0, 255, 0} /*green*/
 #define EXTRA_REST_COLOR {255, 0, 0} /*red*/
+
+
 
 // durations
 
@@ -26,29 +27,15 @@
 #define BLINK_DURATION 500lu  // in milli seconds
 
 
-struct rgb
-{
-    uint8_t r, g, b;
-};
 
+// global variables
 
 STATE_MACHINE sm;
 
 unsigned long time_point;
 
-TIMER work_timer;
+TIMER work_timer; // stores the time of work
 
-
-// setting the colour of rgb led
-
-void set_color(rgb color)
-{
-    analogWrite(R_PIN, color.r);
-
-    analogWrite(G_PIN, color.g);
-
-    analogWrite(B_PIN, color.b);
-}
 
 
 extern class REST_STATE rest_state;
@@ -65,9 +52,9 @@ class WORK_STATE : public BASE_STATE
 		{
         ping();
 
-        work_duration = (work_timer.minute * 60 + work_timer.second) * 1000lu/*in milliseconds*/;
-
         time_point = millis();
+
+        work_duration = (work_timer.minute * 60 + work_timer.second) * 1000lu/*in milliseconds*/;
 
         OLED.clear();
 
@@ -86,6 +73,7 @@ class WORK_STATE : public BASE_STATE
 } work_state;
 
 
+
 extern class EXTRA_REST_STATE extra_rest_state;
 
 //==================
@@ -102,9 +90,11 @@ class REST_STATE : public BASE_STATE
 
         time_point = millis();
 
-        // adding up resting time with unused resting time
+        // calculating resting time and adding it up to the unused resting time
 
-        timer.second += work_timer.second / 4;
+        auto total_resting_seconds = (work_timer.minute * 60 + work_timer.second/*total seconds of work*/) / 4;
+
+        timer.second += total_resting_seconds % 60;
 
         if(timer.second >= 60)
         {
@@ -113,7 +103,7 @@ class REST_STATE : public BASE_STATE
             ++timer.minute;    
         }
 
-        timer.minute += work_timer.minute / 4;
+        timer.minute += total_resting_seconds / 60;
 
         if(timer.minute > MAX_REST_MINS)
         {
@@ -158,7 +148,8 @@ class REST_STATE : public BASE_STATE
 } rest_state;
 
 
-extern class setting_state setting;
+
+extern class SETTING_STATE setting;
 
 //========================
 // define extra_rest state
@@ -242,36 +233,33 @@ class EXTRA_REST_STATE : public BASE_STATE
         }
     }
 
-    // the function used to blink the led using software interrupt
-
-    static void blink_led()
-    {
-        static volatile bool blink = true;
-
-        blink = !blink;
-
-        // turn the light on or off depending on blink_state
-
-        (blink) ? set_color(EXTRA_REST_COLOR) : set_color({0, 0, 0});
-    }
-
     public:
 
     EXTRA_REST_STATE()
-    {
-        // !!!! when I call it from Enter() the work mode light turned green for no reason
-        
-        MsTimer2::set(BLINK_DURATION, blink_led); // setup the independent software interrupt system
+    {   
+        // setting blinking led software interrupt
 
-        work_timer.minute = WORK_MINS;
+        MsTimer2::set(BLINK_DURATION, [](){
+            static volatile bool blink = true;
 
-        work_timer.second = WORK_SECS;
+            blink = !blink;
+
+            (blink) ? set_color(EXTRA_REST_COLOR) : set_color({0, 0, 0});
+        });
+
+        // !!!! when I call it from else where the work mode light turned green for no reason
     }
 } extra_rest_state;
 
 
 
-class setting_state : public BASE_STATE
+//========================
+// define setting state
+//========================
+
+// this state is used to set working time
+
+class SETTING_STATE : public BASE_STATE
 {
 		void Enter()	// initialze this state
 		{
@@ -332,15 +320,13 @@ class setting_state : public BASE_STATE
     }
 } setting;
 
+
+
 void setup()
 {
     // put your setup code here, to run once:
 
-    pinMode(R_PIN, OUTPUT);
-
-    pinMode(G_PIN, OUTPUT);
-
-    pinMode(B_PIN, OUTPUT);
+    rgb_led_setup();
 
     OLED.setup();
 
@@ -349,6 +335,14 @@ void setup()
     buzzer_setup();
 
     button_setup();
+
+    // initialize work timer
+
+    work_timer.minute = WORK_MINS;
+
+    work_timer.second = WORK_SECS;
+
+    // set initial state
 
     sm.change_to(extra_rest_state);
 }
