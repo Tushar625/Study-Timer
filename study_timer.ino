@@ -121,13 +121,17 @@ class REST_STATE : public BASE_STATE
 		{
         // display remaining time
 
-        if(millis() - time_point > 999)
+        auto new_time_point = millis();
+
+        // after some testing I found 997 millisecond is the best to represent 1 second in this system
+
+        if(new_time_point - time_point >= 997)
         {
-            time_point = millis();
+            time_point = new_time_point;  // updating old time point
             
             timer.decrement();
 
-            OLED.print_num(timer);
+            OLED.print_num(timer);     
         }
 
         // state change
@@ -149,6 +153,73 @@ class REST_STATE : public BASE_STATE
 
 
 
+//==================
+// define rest state
+//==================
+
+class COUNT_STATE : public BASE_STATE
+{
+    // TIMER timer;
+
+    void Enter()	// initialze this state
+		{
+        ping();
+
+        time_point = millis();
+
+        work_timer.no_point();
+
+        OLED.print_num(work_timer);
+
+        set_color(WORK_COLOR);
+    }
+
+		void Loop()
+		{
+        // display remaining time
+
+        auto new_time_point = millis();
+
+        // after some testing I found 997 millisecond is the best to represent 1 second in this system
+
+        if(new_time_point - time_point >= 997)
+        {
+            time_point = new_time_point;  // updating old time point
+            
+            work_timer.decrement();
+
+            OLED.print_num(work_timer);     
+        }
+
+        if(work_timer.minute == 0 && work_timer.second == 0)
+        {
+            // resting time is over
+
+            sm.change_to(extra_rest_state);
+        }
+
+        // state change
+
+        if(encoder_button.pressed())
+        {
+            // resting time is over
+
+            sm.change_to(extra_rest_state);
+        }
+    }
+
+    /*public:
+
+    void init(const TIMER& _timer)
+    {
+        timer.second = _timer.second;
+
+        timer.minute = _timer.minute;
+    }*/
+} count_state;
+
+
+
 extern class SETTING_STATE setting;
 
 //========================
@@ -159,13 +230,22 @@ extern class SETTING_STATE setting;
 
 class EXTRA_REST_STATE : public BASE_STATE
 {
+    bool work_mode;
+
     void Enter()	// initialze this state
 		{
         ping();
 
         encoder.setPosition(0);
 
-        work_timer.no_point();
+        if(work_mode)
+        {
+            work_timer.no_point();
+        }
+        else
+        {
+            work_timer.point_up();
+        }
 
         OLED.print_num(work_timer);
 
@@ -194,7 +274,14 @@ class EXTRA_REST_STATE : public BASE_STATE
             }
             else
             {
-                work_timer.no_point();
+                if(work_mode)
+                {
+                    work_timer.no_point();
+                }
+                else
+                {
+                    work_timer.point_up();
+                }
             }
 
             OLED.print_num(work_timer);
@@ -224,9 +311,39 @@ class EXTRA_REST_STATE : public BASE_STATE
 
                 case 0: // change TO WORK state
 
+                        while((encoder_button.update(), encoder_button.isPressed()))
+                        {
+                            if(encoder_button.currentDuration() > 2000)
+                            {
+                                ping();
+
+                                work_mode = !work_mode;
+
+                                if(work_mode)
+                                {
+                                    work_timer.no_point();
+                                }
+                                else
+                                {
+                                    work_timer.point_up();
+                                }
+
+                                OLED.print_num(work_timer);
+
+                                return;
+                            }
+                        }
+
                         MsTimer2::stop(); // stop the blinking LED
 
-                        sm.change_to(work_state);
+                        if(work_mode)
+                        {
+                            sm.change_to(work_state);
+                        }
+                        else
+                        {
+                            sm.change_to(count_state);
+                        }
                         
                         break;
             }
@@ -235,7 +352,7 @@ class EXTRA_REST_STATE : public BASE_STATE
 
     public:
 
-    EXTRA_REST_STATE()
+    EXTRA_REST_STATE() : work_mode(true)
     {   
         // setting blinking led software interrupt
 

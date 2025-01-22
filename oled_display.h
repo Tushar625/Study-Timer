@@ -76,6 +76,8 @@ class OLED_DISPLAY
         display.display();
     }
 
+    
+
     void clear()
     {
         display.clearDisplay();
