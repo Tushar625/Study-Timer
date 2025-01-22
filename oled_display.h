@@ -59,7 +59,7 @@ class OLED_DISPLAY
 
     // print given integer in the middle of the screen
 
-    void print_num(const TIMER& timer)
+    void print(const TIME_POINT& time)
     {
         display.clearDisplay();
 
@@ -69,14 +69,14 @@ class OLED_DISPLAY
 
         display.setCursor(x, y);
 
-        timer.timer_string(str);
+        time.time_string(str);
 
         display.print(str);
 
         display.display();
     }
 
-    
+
 
     void clear()
     {

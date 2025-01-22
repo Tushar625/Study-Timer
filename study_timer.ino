@@ -2,6 +2,7 @@
 
 #include<MsTimer2.h>  // implements a software interrupt that runs a function at specific interval of time
 #include"timer.h"
+#include"time_point.h"
 #include"push_button.h"
 #include"rotary_encoder.h"
 #include"oled_display.h"
@@ -34,7 +35,7 @@ STATE_MACHINE sm;
 
 unsigned long time_point;
 
-TIMER work_timer; // stores the time of work
+TIME_POINT work_time; // stores the time of work
 
 
 
@@ -54,7 +55,7 @@ class WORK_STATE : public BASE_STATE
 
         time_point = millis();
 
-        work_duration = (work_timer.minute * 60 + work_timer.second) * 1000lu/*in milliseconds*/;
+        work_duration = (work_time.minute * 60 + work_time.second) * 1000lu/*in milliseconds*/;
 
         OLED.clear();
 
@@ -82,7 +83,7 @@ extern class EXTRA_REST_STATE extra_rest_state;
 
 class REST_STATE : public BASE_STATE
 {
-    TIMER timer;
+    TIME_POINT tp;
 
     void Enter()	// initialze this state
 		{
@@ -92,27 +93,27 @@ class REST_STATE : public BASE_STATE
 
         // calculating resting time and adding it up to the unused resting time
 
-        auto total_resting_seconds = (work_timer.minute * 60 + work_timer.second/*total seconds of work*/) / 4;
+        auto total_resting_seconds = (work_time.minute * 60 + work_time.second/*total seconds of work*/) / 4;
 
-        timer.second += total_resting_seconds % 60;
+        tp.second += total_resting_seconds % 60;
 
-        if(timer.second >= 60)
+        if(tp.second >= 60)
         {
-            timer.second -= 60;
+            tp.second -= 60;
 
-            ++timer.minute;    
+            ++tp.minute;    
         }
 
-        timer.minute += total_resting_seconds / 60;
+        tp.minute += total_resting_seconds / 60;
 
-        if(timer.minute > MAX_REST_MINS)
+        if(tp.minute > MAX_REST_MINS)
         {
-            timer.minute = MAX_REST_MINS;
+            tp.minute = MAX_REST_MINS;
         }
 
-        timer.no_point();
+        tp.no_point();
 
-        OLED.print_num(timer);
+        OLED.print(tp);
 
         set_color(REST_COLOR);
     }
@@ -129,14 +130,14 @@ class REST_STATE : public BASE_STATE
         {
             time_point = new_time_point;  // updating old time point
             
-            timer.decrement();
+            tp.decrement();
 
-            OLED.print_num(timer);     
+            OLED.print(tp);     
         }
 
         // state change
 
-        if(timer.minute == 0 && timer.second == 0)
+        if(tp.minute == 0 && tp.second == 0)
         {
             // resting time is over
 
@@ -159,17 +160,21 @@ class REST_STATE : public BASE_STATE
 
 class COUNT_STATE : public BASE_STATE
 {
-    // TIMER timer;
+    TIME_POINT *tp;
 
     void Enter()	// initialze this state
 		{
         ping();
 
-        time_point = millis();
+        // after some testing I found 997 millisecond is the best to represent 1 second in this system
 
-        work_timer.no_point();
+        timer.set_duration(997);
 
-        OLED.print_num(work_timer);
+        timer.start();
+
+        tp->no_point();
+
+        OLED.print(*tp);
 
         set_color(WORK_COLOR);
     }
@@ -178,49 +183,34 @@ class COUNT_STATE : public BASE_STATE
 		{
         // display remaining time
 
-        auto new_time_point = millis();
+        if(timer.time_out())
+        {   
+            tp->decrement();
 
-        // after some testing I found 997 millisecond is the best to represent 1 second in this system
-
-        if(new_time_point - time_point >= 997)
-        {
-            time_point = new_time_point;  // updating old time point
-            
-            work_timer.decrement();
-
-            OLED.print_num(work_timer);     
-        }
-
-        if(work_timer.minute == 0 && work_timer.second == 0)
-        {
-            // resting time is over
-
-            sm.change_to(extra_rest_state);
+            OLED.print(*tp);     
         }
 
         // state change
 
-        if(encoder_button.pressed())
+        if((tp->minute == 0 && tp->second == 0) || encoder_button.pressed())
         {
-            // resting time is over
-
             sm.change_to(extra_rest_state);
         }
     }
 
-    /*public:
+    public:
 
-    void init(const TIMER& _timer)
+    // receive the TIME_POINT object from extra rest state
+
+    void init(TIME_POINT *_tp)
     {
-        timer.second = _timer.second;
-
-        timer.minute = _timer.minute;
-    }*/
+        tp = _tp;
+    }
 } count_state;
 
 
 
-extern class SETTING_STATE setting;
+extern class SETTING_STATE setting_state;
 
 //========================
 // define extra_rest state
@@ -238,16 +228,9 @@ class EXTRA_REST_STATE : public BASE_STATE
 
         encoder.setPosition(0);
 
-        if(work_mode)
-        {
-            work_timer.no_point();
-        }
-        else
-        {
-            work_timer.point_up();
-        }
+        work_mode ? work_time.no_point() : work_time.point_up();
 
-        OLED.print_num(work_timer);
+        OLED.print(work_time);
 
         MsTimer2::start();  // start the blinking LED
     }
@@ -262,29 +245,22 @@ class EXTRA_REST_STATE : public BASE_STATE
             
             if(encoder.getPosition() >= 1)
             {
-                work_timer.point_second();
+                work_time.point_second();
 
                 encoder.setPosition(1);
             }
             else if(encoder.getPosition() <= -1)
             {
-                work_timer.point_minute();
+                work_time.point_minute();
 
                 encoder.setPosition(-1);
             }
             else
             {
-                if(work_mode)
-                {
-                    work_timer.no_point();
-                }
-                else
-                {
-                    work_timer.point_up();
-                }
+                work_mode ? work_time.no_point() : work_time.point_up();
             }
 
-            OLED.print_num(work_timer);
+            OLED.print(work_time);
         }
 
         // selection and change state
@@ -295,17 +271,17 @@ class EXTRA_REST_STATE : public BASE_STATE
             {
                 case -1: // change TO SETTING state
                 
-                        work_timer.select_minute();
+                        work_time.select_minute();
                         
-                        sm.change_to(setting, &work_timer, &(work_timer.minute), 60, 0);
+                        sm.change_to(setting_state, &work_time, &(work_time.minute), 60, 0);
                         
                         break;
 
                 case 1: // change TO SETTING state
 
-                        work_timer.select_second();
+                        work_time.select_second();
                         
-                        sm.change_to(setting, &work_timer, &(work_timer.second), 59, 0);
+                        sm.change_to(setting_state, &work_time, &(work_time.second), 59, 0);
                         
                         break;
 
@@ -319,16 +295,9 @@ class EXTRA_REST_STATE : public BASE_STATE
 
                                 work_mode = !work_mode;
 
-                                if(work_mode)
-                                {
-                                    work_timer.no_point();
-                                }
-                                else
-                                {
-                                    work_timer.point_up();
-                                }
+                                work_mode ? work_time.no_point() : work_time.point_up();
 
-                                OLED.print_num(work_timer);
+                                OLED.print(work_time);
 
                                 return;
                             }
@@ -342,7 +311,7 @@ class EXTRA_REST_STATE : public BASE_STATE
                         }
                         else
                         {
-                            sm.change_to(count_state);
+                            sm.change_to(count_state, &work_time);
                         }
                         
                         break;
@@ -378,11 +347,17 @@ class EXTRA_REST_STATE : public BASE_STATE
 
 class SETTING_STATE : public BASE_STATE
 {
+    TIME_POINT *tp;
+
+    uint8_t *data;  // points to a member data of TIME_POINT (minute or second) object received
+
+    uint8_t max_rotation, min_rotation;
+
 		void Enter()	// initialze this state
 		{
         ping();
 
-        OLED.print_num(*timer);
+        OLED.print(*tp);
 
         encoder.setPosition(*data);
     }
@@ -406,7 +381,7 @@ class SETTING_STATE : public BASE_STATE
 
             *data = encoder.getPosition();
 
-            OLED.print_num(*timer);
+            OLED.print(*tp);
         }
 
         // selection
@@ -417,17 +392,11 @@ class SETTING_STATE : public BASE_STATE
         }
     }
 
-    TIMER *timer;
-
-    uint8_t *data;  // points to a member data of timer (minute or second)
-
-    uint8_t max_rotation, min_rotation;
-
     public:
 
-		void init(TIMER *_timer, uint8_t *_data, uint8_t _max_rotation, uint8_t _min_rotation)
+		void init(TIME_POINT *_tp, uint8_t *_data, uint8_t _max_rotation, uint8_t _min_rotation)
 		{
-        timer = _timer;
+        tp = _tp;
 
         data = _data;
 
@@ -435,7 +404,7 @@ class SETTING_STATE : public BASE_STATE
         
         min_rotation = _min_rotation;
     }
-} setting;
+} setting_state;
 
 
 
@@ -455,9 +424,9 @@ void setup()
 
     // initialize work timer
 
-    work_timer.minute = WORK_MINS;
+    work_time.minute = WORK_MINS;
 
-    work_timer.second = WORK_SECS;
+    work_time.second = WORK_SECS;
 
     // set initial state
 

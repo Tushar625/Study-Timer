@@ -3,68 +3,37 @@
 
 class TIMER
 {
-    char point;
+    unsigned long time_point, duration;
 
     public:
 
-    uint8_t minute, second;
-
-    // constructors
-
-    TIMER(uint8_t min, uint8_t sec) : minute(min), second(sec), point(':')
-    {}
-
-    TIMER() : minute(0), second(0), point(':')
-    {}
-
-    void no_point()
+    void set_duration(unsigned long ms) noexcept
     {
-        point = ':';
+        duration = ms;
     }
 
-    void point_up()
+    // take a time point
+
+    void start() noexcept
     {
-        point = 24; // up
+        time_point = millis();
     }
 
-    void point_second()
-    {
-        point = 26; // right
-    }
+    // returns true wjen time is over and resets the timer
 
-    void point_minute()
+    bool time_out() noexcept
     {
-        point = 27; // left
-    }
+        auto new_time_point = millis();
 
-    void select_second()
-    {
-        point = 16; // right
-    }
-
-    void select_minute()
-    {
-        point = 17; // left
-    }
-
-    void decrement()
-    {
-        if(second)
+        if(new_time_point - time_point >= duration)
         {
-            --second;
-        }
-        else if(minute)
-        {
-            --minute;
+            time_point = new_time_point;  // updating old time point
 
-            second = 59;
+            return true;
         }
-    }
 
-    void timer_string(char *str)
-    {
-        sprintf(str, "%.2d%c%.2d", minute, point, second);
+        return false;
     }
-};
+} timer;
 
 #endif
