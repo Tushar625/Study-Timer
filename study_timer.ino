@@ -25,7 +25,12 @@
 #define WORK_MINS /*0*/ 20
 #define WORK_SECS /*10*/ 0
 #define MAX_REST_MINS 20
-#define BLINK_DURATION 500lu  // in milli seconds
+
+// durations in milli seconds
+
+#define BLINK_DURATION 500lu
+// after some testing I found 997 millisecond is the best to represent 1 second in this system
+#define SECOND_DURATION 997lu
 
 
 
@@ -33,13 +38,15 @@
 
 STATE_MACHINE sm;
 
-unsigned long time_point;
-
-TIME_POINT work_time; // stores the time of work
-
 
 
 extern class REST_STATE rest_state;
+
+extern class EXTRA_REST_STATE extra_rest_state;
+
+extern class SETTING_STATE setting_state;
+
+
 
 //==================
 // define work state
@@ -47,15 +54,15 @@ extern class REST_STATE rest_state;
 
 class WORK_STATE : public BASE_STATE
 {   
-    unsigned long work_duration;
+    unsigned work_sec;  // work time in seconds
 
     void Enter()	// initialze this state
 		{
         ping();
 
-        time_point = millis();
+        timer.set_duration(work_sec * 1000lu);
 
-        work_duration = (work_time.minute * 60 + work_time.second) * 1000lu/*in milliseconds*/;
+        timer.start();
 
         OLED.clear();
 
@@ -66,16 +73,23 @@ class WORK_STATE : public BASE_STATE
 		{
         // state change
 
-        if(millis() - time_point > work_duration)
+        if(timer.time_out())
         {
-            sm.change_to(rest_state);
+            sm.change_to(rest_state, work_sec);
         }
+    }
+
+    public:
+
+    // receiving the work time in seconds
+
+    void init(unsigned _work_sec)
+    {
+        work_sec = _work_sec;
     }
 } work_state;
 
 
-
-extern class EXTRA_REST_STATE extra_rest_state;
 
 //==================
 // define rest state
@@ -89,13 +103,49 @@ class REST_STATE : public BASE_STATE
 		{
         ping();
 
-        time_point = millis();
+        timer.set_duration(SECOND_DURATION);
 
+        timer.start();
+
+        OLED.print(tp);
+
+        set_color(REST_COLOR);
+    }
+
+		void Loop()
+		{
+        // display remaining rest time
+
+        if(timer.time_out())
+        {   
+            tp.decrement();
+
+            OLED.print(tp);     
+        }
+
+        // state change
+
+        if((tp.minute == 0 && tp.second == 0) || encoder_button.pressed())
+        {
+            // resting time is over or user wants to skip rest
+
+            sm.change_to(extra_rest_state);
+        }
+    }
+
+    public:
+
+    // receiving the work time in seconds and calculating our time point
+
+    void init(unsigned work_sec)
+    {
         // calculating resting time and adding it up to the unused resting time
 
-        auto total_resting_seconds = (work_time.minute * 60 + work_time.second/*total seconds of work*/) / 4;
+        auto total_resting_seconds = work_sec / 4;
 
         tp.second += total_resting_seconds % 60;
+
+        // tp.second cannot be > 59 before the addition, hence following correction is sufficient
 
         if(tp.second >= 60)
         {
@@ -106,48 +156,11 @@ class REST_STATE : public BASE_STATE
 
         tp.minute += total_resting_seconds / 60;
 
+        // one can't get too much rest, so we truncate max resting time
+
         if(tp.minute > MAX_REST_MINS)
         {
             tp.minute = MAX_REST_MINS;
-        }
-
-        tp.no_point();
-
-        OLED.print(tp);
-
-        set_color(REST_COLOR);
-    }
-
-		void Loop()
-		{
-        // display remaining time
-
-        auto new_time_point = millis();
-
-        // after some testing I found 997 millisecond is the best to represent 1 second in this system
-
-        if(new_time_point - time_point >= 997)
-        {
-            time_point = new_time_point;  // updating old time point
-            
-            tp.decrement();
-
-            OLED.print(tp);     
-        }
-
-        // state change
-
-        if(tp.minute == 0 && tp.second == 0)
-        {
-            // resting time is over
-
-            sm.change_to(extra_rest_state);
-        }
-        else if(encoder_button.pressed())
-        {
-            // skip rest
-
-            sm.change_to(extra_rest_state);
         }
     }
 } rest_state;
@@ -166,9 +179,7 @@ class COUNT_STATE : public BASE_STATE
 		{
         ping();
 
-        // after some testing I found 997 millisecond is the best to represent 1 second in this system
-
-        timer.set_duration(997);
+        timer.set_duration(SECOND_DURATION);
 
         timer.start();
 
@@ -210,8 +221,6 @@ class COUNT_STATE : public BASE_STATE
 
 
 
-extern class SETTING_STATE setting_state;
-
 //========================
 // define extra_rest state
 //========================
@@ -220,7 +229,9 @@ extern class SETTING_STATE setting_state;
 
 class EXTRA_REST_STATE : public BASE_STATE
 {
-    bool work_mode;
+    bool work_mode; // work mode or timer mode
+
+    TIME_POINT work_time; // stores the time of work
 
     void Enter()	// initialze this state
 		{
@@ -270,6 +281,19 @@ class EXTRA_REST_STATE : public BASE_STATE
             switch((int)encoder.getPosition())
             {
                 case -1: // change TO SETTING state
+
+                        if(held_down(encoder_button))
+                        {
+                            // the button was pressed down for 2 seconds
+
+                            ping();
+
+                            work_time.minute = WORK_MINS; // setting to default
+
+                            OLED.print(work_time);
+
+                            break;
+                        }
                 
                         work_time.select_minute();
                         
@@ -279,6 +303,19 @@ class EXTRA_REST_STATE : public BASE_STATE
 
                 case 1: // change TO SETTING state
 
+                        if(held_down(encoder_button))
+                        {
+                            // the button was pressed down for 2 seconds
+
+                            ping();
+
+                            work_time.second = WORK_SECS; // setting to default
+
+                            OLED.print(work_time);
+
+                            break;
+                        }
+
                         work_time.select_second();
                         
                         sm.change_to(setting_state, &work_time, &(work_time.second), 59, 0);
@@ -287,27 +324,26 @@ class EXTRA_REST_STATE : public BASE_STATE
 
                 case 0: // change TO WORK state
 
-                        while((encoder_button.update(), encoder_button.isPressed()))
+                        if(held_down(encoder_button))
                         {
-                            if(encoder_button.currentDuration() > 2000)
-                            {
-                                ping();
+                            // the button was pressed down for 2 second
 
-                                work_mode = !work_mode;
+                            ping();
 
-                                work_mode ? work_time.no_point() : work_time.point_up();
+                            work_mode = !work_mode;
 
-                                OLED.print(work_time);
+                            work_mode ? work_time.no_point() : work_time.point_up();
 
-                                return;
-                            }
+                            OLED.print(work_time);
+
+                            break;
                         }
 
                         MsTimer2::stop(); // stop the blinking LED
 
                         if(work_mode)
                         {
-                            sm.change_to(work_state);
+                            sm.change_to(work_state, work_time.minute * 60 + work_time.second/*work time in seconds*/);
                         }
                         else
                         {
@@ -321,7 +357,7 @@ class EXTRA_REST_STATE : public BASE_STATE
 
     public:
 
-    EXTRA_REST_STATE() : work_mode(true)
+    EXTRA_REST_STATE() : work_mode(true), work_time(WORK_MINS, WORK_SECS)
     {   
         // setting blinking led software interrupt
 
@@ -421,12 +457,6 @@ void setup()
     buzzer_setup();
 
     button_setup();
-
-    // initialize work timer
-
-    work_time.minute = WORK_MINS;
-
-    work_time.second = WORK_SECS;
 
     // set initial state
 

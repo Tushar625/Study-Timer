@@ -31,5 +31,22 @@ void button_setup()
     encoder_button.setPressedState(LOW);
 }
 
+// indicates if the button was held down or not
+
+    bool held_down(const Bounce2::Button& button)
+    {
+        while((button.update(), button.isPressed()))
+        {
+            if(button.currentDuration() > 2000)
+            {
+                // the button was pressed down for 2 second
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 
 #endif // PUSH_BUTTON_HEADER
