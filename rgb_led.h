@@ -1,3 +1,8 @@
+
+/*
+    Here I provide some functions to setup and handle the RGB LED
+*/
+
 #ifndef RGB_LED_HEADER
 #define RGB_LED_HEADER
 
@@ -9,6 +14,8 @@ struct rgb
 {
     uint8_t r, g, b;
 };
+
+// setting up RGB LED system
 
 void rgb_led_setup()
 {

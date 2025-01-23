@@ -1,4 +1,4 @@
-// this file provides objects for easy handling of push button
+// this file provides objects for easy setup and handling of push button
 
 #ifndef PUSH_BUTTON_HEADER
 #define PUSH_BUTTON_HEADER
@@ -33,20 +33,20 @@ void button_setup()
 
 // indicates if the button was held down or not
 
-    bool held_down(const Bounce2::Button& button)
+bool held_down(const Bounce2::Button& button)
+{
+    while((button.update(), button.isPressed()))
     {
-        while((button.update(), button.isPressed()))
+        if(button.currentDuration() > 2000)
         {
-            if(button.currentDuration() > 2000)
-            {
-                // the button was pressed down for 2 second
+            // the button was pressed down for 2 second
 
-                return true;
-            }
+            return true;
         }
-
-        return false;
     }
+
+    return false;
+}
 
 
 #endif // PUSH_BUTTON_HEADER

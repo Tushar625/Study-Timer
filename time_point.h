@@ -61,7 +61,7 @@ class TIME_POINT
         }
     }
 
-    void time_string(char *str)
+    void time_string(char *str) const
     {
         sprintf(str, "%.2d%c%.2d", minute, point, second);
     }
