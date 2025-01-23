@@ -1,3 +1,4 @@
+
 // this file provides an object for easy handling of rotary encoder
 
 #ifndef ROTARY_ENCODER_HEADER

@@ -1,6 +1,34 @@
 // https://github.com/PaulStoffregen/MsTimer2/blob/f90127ce8289b73c2e74b8be222ab7c755621717/MsTimer2.h
 
-#include<MsTimer2.h>  // implements a software interrupt that runs a function at specific interval of time
+/*
+    main project file, here I define all the states
+
+    note:
+    
+    This device can operate in two distinct modes
+
+    i.  Work Timer
+    ii. Normal Timer
+
+    Work Timer mode:
+
+    Extra Rest
+    |       ^
+    V       |
+    Work    |
+    |       |
+    V       |
+    Rest----|
+
+    Normal Timer mode:
+
+    Extra Rest (Pause)
+    |       ^
+    V       |
+    Count---|
+*/
+
+#include<MsTimer2.h>  // version 1.1, implements a software interrupt that runs a function at specific interval of time
 #include"timer.h"
 #include"time_point.h"
 #include"push_button.h"
@@ -40,6 +68,11 @@ STATE_MACHINE sm;
 
 
 
+/*
+    the states are actually global variables, following state objects are declared
+    here because they are referenced before they are defined
+*/
+
 extern class REST_STATE rest_state;
 
 extern class EXTRA_REST_STATE extra_rest_state;
@@ -76,7 +109,13 @@ class WORK_STATE : public BASE_STATE
         if(timer.time_out())
         {
             sm.change_to(rest_state, work_sec);
+
+            return;
         }
+
+        // progress bar display how much time is left
+
+        OLED.progress_bar(timer.remaining_time());
     }
 
     public:
@@ -97,11 +136,15 @@ class WORK_STATE : public BASE_STATE
 
 class REST_STATE : public BASE_STATE
 {
-    TIME_POINT tp;
+    TIME_POINT tp;  // used to display remaining rest time on the screen
 
     void Enter()	// initialze this state
 		{
         ping();
+
+        /*
+            timer is used to decrement the time point 'tp' per second
+        */
 
         timer.set_duration(SECOND_DURATION);
 
@@ -120,7 +163,7 @@ class REST_STATE : public BASE_STATE
         {   
             tp.decrement();
 
-            OLED.print(tp);     
+            OLED.print(tp);
         }
 
         // state change
@@ -168,12 +211,12 @@ class REST_STATE : public BASE_STATE
 
 
 //==================
-// define rest state
+// define count state
 //==================
 
 class COUNT_STATE : public BASE_STATE
 {
-    TIME_POINT *tp;
+    TIME_POINT *tp; // receives the time point from extra rest state
 
     void Enter()	// initialze this state
 		{
@@ -183,7 +226,7 @@ class COUNT_STATE : public BASE_STATE
 
         timer.start();
 
-        tp->no_point();
+        tp->no_point(); // print ':' between minute and second
 
         OLED.print(*tp);
 
@@ -205,6 +248,12 @@ class COUNT_STATE : public BASE_STATE
 
         if((tp->minute == 0 && tp->second == 0) || encoder_button.pressed())
         {
+            /*
+                go to extra rest state when the time is over or
+                user presses the button, which actually "pauses"
+                the timer
+            */
+            
             sm.change_to(extra_rest_state);
         }
     }
@@ -224,8 +273,6 @@ class COUNT_STATE : public BASE_STATE
 //========================
 // define extra_rest state
 //========================
-
-// for now this state uses interrupts for blinking light, revert back to time point method if needed in future
 
 class EXTRA_REST_STATE : public BASE_STATE
 {
@@ -268,6 +315,8 @@ class EXTRA_REST_STATE : public BASE_STATE
             }
             else
             {
+                // position is 0
+
                 work_mode ? work_time.no_point() : work_time.point_up();
             }
 
@@ -280,11 +329,13 @@ class EXTRA_REST_STATE : public BASE_STATE
         {
             switch((int)encoder.getPosition())
             {
-                case -1: // change TO SETTING state
+                case -1: 
 
                         if(held_down(encoder_button))
                         {
                             // the button was pressed down for 2 seconds
+
+                            // set minute to its default value
 
                             ping();
 
@@ -294,6 +345,8 @@ class EXTRA_REST_STATE : public BASE_STATE
 
                             break;
                         }
+
+                        // change TO SETTING state to set minute
                 
                         work_time.select_minute();
                         
@@ -301,11 +354,13 @@ class EXTRA_REST_STATE : public BASE_STATE
                         
                         break;
 
-                case 1: // change TO SETTING state
+                case 1: 
 
                         if(held_down(encoder_button))
                         {
                             // the button was pressed down for 2 seconds
+
+                            // set second to its default value
 
                             ping();
 
@@ -316,17 +371,21 @@ class EXTRA_REST_STATE : public BASE_STATE
                             break;
                         }
 
+                        // change TO SETTING state to set second
+
                         work_time.select_second();
                         
                         sm.change_to(setting_state, &work_time, &(work_time.second), 59, 0);
                         
                         break;
 
-                case 0: // change TO WORK state
+                case 0: 
 
                         if(held_down(encoder_button))
                         {
                             // the button was pressed down for 2 second
+
+                            // switch between Work Timer and Normal Timer modes
 
                             ping();
 
@@ -338,6 +397,11 @@ class EXTRA_REST_STATE : public BASE_STATE
 
                             break;
                         }
+
+                        /*
+                            change TO WORK or count state depending on the mode of operation
+                            (Work Timer or Normal Timer)
+                        */
 
                         MsTimer2::stop(); // stop the blinking LED
 
@@ -379,13 +443,11 @@ class EXTRA_REST_STATE : public BASE_STATE
 // define setting state
 //========================
 
-// this state is used to set working time
-
 class SETTING_STATE : public BASE_STATE
 {
-    TIME_POINT *tp;
+    TIME_POINT *tp; // receives the time point from extra rest state
 
-    uint8_t *data;  // points to a member data of TIME_POINT (minute or second) object received
+    uint8_t *data;  // points to a member data (minute or second) of the TIME_POINT object received
 
     uint8_t max_rotation, min_rotation;
 
@@ -404,7 +466,7 @@ class SETTING_STATE : public BASE_STATE
 
         if((int)encoder.getDirection())
         {
-            // limit the position between MAX and MIN
+            // limit the position between MAX and MIN and set *data according to the rotar position
             
             if(encoder.getPosition() > max_rotation)
             {
@@ -420,10 +482,12 @@ class SETTING_STATE : public BASE_STATE
             OLED.print(*tp);
         }
 
-        // selection
+        // selection and state change
 
         if(encoder_button.pressed())
         {
+            // the value is selected for *data
+
             sm.change_to(extra_rest_state);
         }
     }

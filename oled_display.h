@@ -101,6 +101,19 @@ class OLED_DISPLAY
 
         display.display();
     }
+
+    // display a progress bar near the bottom of the screen
+
+    void progress_bar(float fraction)
+    {
+        display.clearDisplay();
+
+        display.drawRect(0, SCREEN_HEIGHT - 7, SCREEN_WIDTH, 5, SH110X_WHITE);
+
+        display.fillRect(SCREEN_WIDTH - SCREEN_WIDTH * fraction, SCREEN_HEIGHT - 7, SCREEN_WIDTH * fraction, 5, SH110X_WHITE);
+
+        display.display();
+    }
 } OLED; // display and ui object
 
 #endif // OLED_DISPLAY_HEADER

@@ -1,5 +1,14 @@
+
+// this file provides an object for easy handling of timimg
+
 #ifndef TIMER_HEADER
 #define TIMER_HEADER
+
+/*
+    this class provides a timer like functionality, you set a duration in ms, start the timer
+    and check for time out. Upon time out the timer autometically resets and starts again for
+    the same duration.
+*/
 
 class TIMER
 {
@@ -12,14 +21,24 @@ class TIMER
         duration = ms;
     }
 
-    // take a time point
+    // take a time point and start the timer
 
     void start() noexcept
     {
         time_point = millis();
     }
 
-    // returns true wjen time is over and resets the timer
+    // returns the remaining time as a fraction
+
+    float remaining_time() noexcept
+    {
+        return 1 - (millis() - time_point) / (float)duration;
+    }
+
+    /*
+        returns true once after set duration has been passed and
+        resets and restarts the timer
+    */
 
     bool time_out() noexcept
     {

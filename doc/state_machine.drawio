@@ -52,6 +52,12 @@
                 <mxCell id="17" value="&lt;font style=&quot;font-size: 13px;&quot;&gt;Work time&lt;/font&gt;" style="text;strokeColor=none;align=center;fillColor=none;html=1;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#000000;rotation=270;" vertex="1" parent="1">
                     <mxGeometry x="430" y="640" width="90" height="30" as="geometry"/>
                 </mxCell>
+                <mxCell id="18" value="Work Timer mode" style="text;strokeColor=none;align=center;fillColor=none;html=1;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+                    <mxGeometry x="620" y="430" width="130" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="19" value="Normal Timer mode" style="text;strokeColor=none;align=center;fillColor=none;html=1;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+                    <mxGeometry x="625" y="640" width="130" height="30" as="geometry"/>
+                </mxCell>
             </root>
         </mxGraphModel>
     </diagram>
