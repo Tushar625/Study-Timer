@@ -29,15 +29,17 @@
 */
 
 #include<MsTimer2.h>  // version 1.1, implements a software interrupt that runs a function at specific interval of time
+
 #include"timer.h"
-#include"time_point.h"
 #include"push_button.h"
 #include"rotary_encoder.h"
 #include"oled_display.h"
+
 #include"buzzer.h"
 #include"rgb_led.h"
-#include"state_machine.h"
 
+#include"state_machine.h"
+#include"time_point.h"
 
 
 // colors
@@ -93,7 +95,7 @@ class WORK_STATE : public BASE_STATE
 		{
         ping();
 
-        timer.set_duration(work_sec * 1000lu);
+        timer.set_duration(work_sec * SECOND_DURATION);
 
         timer.start();
 
