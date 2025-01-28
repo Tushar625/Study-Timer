@@ -44,7 +44,7 @@
 
 // colors
 
-#define WORK_COLOR {255 / 5, 100 / 5, 0} /*dim orange*/
+#define WORK_COLOR {255, 100, 0} /*orange*/
 #define REST_COLOR {0, 255, 0} /*green*/
 #define EXTRA_REST_COLOR {255, 0, 0} /*red*/
 
